@@ -1,1 +1,85 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 
+import os,sys
+from time import time
+from datetime import datetime
+from netmiko import ConnectHandler
+from openpyxl import workbook
+from openpyxl import load_workbook
+
+def read_excel(numb):
+
+    ip_list = []
+
+    path1 = os.path.abspath(__file__)  # 获取当前文件 two2.py 的绝对路径
+    path2 = os.path.dirname(path1)     # 获取当前文件 two2.py上一级目录
+    wb = load_workbook(os.path.join(path2,'ip_list.xlsx'))  # 拼接 two2.py上一级目录+ ip 列表
+    ws = wb["Sheet1"]
+    
+    for cow_num in range(2,ws.max_row+1):
+
+        ipaddr = ws[numb+str(cow_num)].value
+        ip_list.append(ipaddr)
+
+    return ip_list
+
+def get_config(ipaddr):
+
+    #password = getpass.getpass("password: ")
+    session = ConnectHandler(device_type="huawei_telnet",
+                                ip=ipaddr,
+                                username="admin",
+                                password="password",
+                                banner_timeout=300)
+    
+    print("connecting to "+ ipaddr)
+    print (f"---- Getting HUAWEI configuration from {ipaddr}-----------")
+
+    # send_commands = ['show ver']
+    # config_data = session.send_config_set(send_commands)
+    path1 = os.path.abspath(__file__)  # 获取当前文件 two2.py 的绝对路径
+    path2 = os.path.dirname(path1)     # 获取当前文件 two2.py上一级目录
+    commnds = (os.path.join(path2,'commnd.txt'))  # 拼接 two2.py上一级目录+ 命令脚本
+    config_data = session.send_config_from_file(commnds)
+    
+    session.disconnect()
+
+    return config_data
+
+def write_config_to_file(config_data,ipaddr,host):
+    
+    now = datetime.now()
+    date= "%s-%s-%s"%(now.year,now.month,now.day)
+    time_now = "%s-%s"%(now.hour,now.minute)
+    
+    config_path = 'D://backup_' +date
+    verify_path = os.path.exists(config_path)
+    if not verify_path:
+        os.makedirs(config_path)
+
+    #config_filename = config_path+"/"+ host +"_"+ ipaddr +"_"+date+"_" + time_now
+    config_filename = config_path+"/"+ host +"_"+ ipaddr +"_"+date+"_" + time_now
+    print ('---- Writing configuration: ', config_filename)
+    with open( config_filename, "w",encoding='utf-8' ) as config_out:  
+        config_out.write( config_data )
+
+    return
+
+def main():
+    starting_time = time()   
+    ip_list = read_excel("a")
+    host_list = read_excel("b")
+
+    num=0
+    for ipaddr in ip_list:   
+        hwconfig = get_config(ipaddr)
+        write_config_to_file(hwconfig,ipaddr,host_list[num])
+        num=num+1
+    print ('\n---- End get config threading, elapsed time=', time() - starting_time)
+
+#========================================
+# Get config of HUAWEI
+#========================================
+if __name__ == '__main__':
+    main()
